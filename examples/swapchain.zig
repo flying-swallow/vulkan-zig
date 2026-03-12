@@ -111,7 +111,7 @@ pub const Swapchain = struct {
     }
 
     pub fn waitForAllFences(self: Swapchain) !void {
-        for (self.swap_images) |si| si.waitForFence(self.gc) catch {};
+        for (self.swap_images) |si| try si.waitForFence(self.gc);
     }
 
     pub fn deinit(self: Swapchain) void {
@@ -125,7 +125,13 @@ pub const Swapchain = struct {
         const gc = self.gc;
         const allocator = self.allocator;
         const old_handle = self.handle;
+
+        // We need to wait until all semaphores are signaled. This can be done either using a deferred
+        // destruction queue, or just by waiting until the associated queue is idle.
+        try self.gc.dev.queueWaitIdle(self.gc.present_queue.handle);
+
         self.deinitExceptSwapchain();
+
         // set current handle to NULL_HANDLE to signal that the current swapchain does no longer need to be
         // de-initialized if we fail to recreate it.
         self.handle = .null_handle;
@@ -169,11 +175,11 @@ pub const Swapchain = struct {
         // Step 1: Make sure the current frame has finished rendering
         const current = self.currentSwapImage();
         try current.waitForFence(self.gc);
-        try self.gc.dev.resetFences(1, @ptrCast(&current.frame_fence));
+        try self.gc.dev.resetFences(&.{current.frame_fence});
 
         // Step 2: Submit the command buffer
         const wait_stage = [_]vk.PipelineStageFlags{.{ .top_of_pipe_bit = true }};
-        try self.gc.dev.queueSubmit(self.gc.graphics_queue.handle, 1, &[_]vk.SubmitInfo{.{
+        try self.gc.dev.queueSubmit(self.gc.graphics_queue.handle, &.{.{
             .wait_semaphore_count = 1,
             .p_wait_semaphores = @ptrCast(&current.image_acquired),
             .p_wait_dst_stage_mask = &wait_stage,
@@ -261,7 +267,7 @@ const SwapImage = struct {
     }
 
     fn waitForFence(self: SwapImage, gc: *const GraphicsContext) !void {
-        _ = try gc.dev.waitForFences(1, @ptrCast(&self.frame_fence), .true, std.math.maxInt(u64));
+        _ = try gc.dev.waitForFences(&.{self.frame_fence}, .true, std.math.maxInt(u64));
     }
 };
 
