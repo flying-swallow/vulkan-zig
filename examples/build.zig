@@ -26,6 +26,7 @@ pub fn build(b: *std.Build) void {
     const glfw = b.dependency("glfw", .{
         .target = target,
         .optimize = optimize,
+        .wayland = true,
     });
     triangle_exe.root_module.linkLibrary(glfw.artifact("glfw"));
 
