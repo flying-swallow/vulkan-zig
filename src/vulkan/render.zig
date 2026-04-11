@@ -379,7 +379,7 @@ const Renderer = struct {
     allocator: Allocator,
     registry: *const reg.Registry,
     id_renderer: *IdRenderer,
-    decls_by_name: std.StringArrayHashMap(reg.DeclarationType),
+    decls_by_name: std.array_hash_map.String(reg.DeclarationType),
     structure_types: std.StringHashMap(void),
     have_video: bool,
 
@@ -390,11 +390,11 @@ const Renderer = struct {
         id_renderer: *IdRenderer,
         have_video: bool,
     ) !Self {
-        var decls_by_name = std.StringArrayHashMap(reg.DeclarationType).init(allocator);
-        errdefer decls_by_name.deinit();
+        var decls_by_name: std.array_hash_map.String(reg.DeclarationType) = .empty;
+        errdefer decls_by_name.deinit(allocator);
 
         for (registry.decls) |*decl| {
-            const result = try decls_by_name.getOrPut(decl.name);
+            const result = try decls_by_name.getOrPut(allocator, decl.name);
             if (result.found_existing) {
                 // Allow overriding 'foreign' types. These are for example the Vulkan Video types
                 // declared as foreign type in the vk.xml, then defined in video.xml. Sometimes
@@ -438,7 +438,7 @@ const Renderer = struct {
     }
 
     fn deinit(self: *Self) void {
-        self.decls_by_name.deinit();
+        self.decls_by_name.deinit(self.allocator);
     }
 
     fn writeIdentifier(self: Self, id: []const u8) !void {
