@@ -243,6 +243,7 @@ fn parseContainer(allocator: Allocator, ty: *xml.Element, is_union: bool, api: r
                 return error.InvalidRegistry;
             }
         }
+
         i += 1;
     }
 
@@ -260,6 +261,8 @@ fn parseContainer(allocator: Allocator, ty: *xml.Element, is_union: bool, api: r
         }
     }
 
+    const is_vk_device_create_info = mem.eql(u8, name, "VkDeviceCreateInfo");
+
     it = ty.findChildrenByTag("member");
     for (members) |*member| {
         const member_elem = while (it.next()) |elem| {
@@ -271,6 +274,18 @@ fn parseContainer(allocator: Allocator, ty: *xml.Element, is_union: bool, api: r
         // pNext isn't always properly marked as optional, so just manually override it,
         if (mem.eql(u8, member.name, "pNext")) {
             member.field_type.pointer.is_optional = true;
+        }
+
+        // HACK: These fields don't have the correct attributes set. Probably because they are
+        // deprecated. Just fix them up here to create a valid registry.
+        if (is_vk_device_create_info) {
+            if (mem.eql(u8, member.name, "enabledLayerCount")) {
+                member.is_optional = true;
+            } else if (mem.eql(u8, member.name, "ppEnabledLayerNames")) {
+                member.field_type.pointer.is_optional = true;
+                member.field_type.pointer.size = .{ .other_field = "enabledLayerCount" };
+                member.field_type.pointer.child.pointer.size = .zero_terminated;
+            }
         }
     }
 
