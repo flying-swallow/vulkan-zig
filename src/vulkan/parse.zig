@@ -291,7 +291,7 @@ fn parseFuncPointer(allocator: Allocator, ty: *xml.Element, api: registry.Api) !
     // The layout of this field changed somewhere around version 339. Just try to parse it as the new
     // version first and fall back to the old version of that fails...
 
-    const decl = parseCommand(allocator, ty, api) catch {
+    const decl = parseCommand(allocator, ty, api, true) catch {
         // Old definitions were a typedef like this
         //
         // <type category="funcpointer">typedef void (VKAPI_PTR *<name>PFN_vkInternalAllocationNotification</name>)(
@@ -550,7 +550,7 @@ fn parseCommands(
         if (!requiredByApi(elem, api))
             continue;
 
-        try decls.append(allocator, try parseCommand(allocator, elem, api));
+        try decls.append(allocator, try parseCommand(allocator, elem, api, false));
     }
 }
 
@@ -569,7 +569,7 @@ fn splitCommaAlloc(allocator: Allocator, text: []const u8) ![][]const u8 {
     return codes;
 }
 
-fn parseCommand(allocator: Allocator, elem: *xml.Element, api: registry.Api) !registry.Declaration {
+fn parseCommand(allocator: Allocator, elem: *xml.Element, api: registry.Api, ptrs_optional: bool) !registry.Declaration {
     if (elem.getAttribute("alias")) |alias| {
         const name = elem.getAttribute("name") orelse return error.InvalidRegistry;
         return registry.Declaration{
@@ -582,7 +582,7 @@ fn parseCommand(allocator: Allocator, elem: *xml.Element, api: registry.Api) !re
 
     const proto = elem.findChildByTag("proto") orelse return error.InvalidRegistry;
     var proto_xctok = cparse.XmlCTokenizer.init(proto);
-    const command_decl = try cparse.parseParamOrProto(allocator, &proto_xctok, false);
+    const command_decl = try cparse.parseParamOrProto(allocator, &proto_xctok, ptrs_optional);
 
     var params = try allocator.alloc(registry.Command.Param, elem.children.len);
 
@@ -593,7 +593,7 @@ fn parseCommand(allocator: Allocator, elem: *xml.Element, api: registry.Api) !re
             continue;
 
         var xctok = cparse.XmlCTokenizer.init(param);
-        const decl = try cparse.parseParamOrProto(allocator, &xctok, false);
+        const decl = try cparse.parseParamOrProto(allocator, &xctok, ptrs_optional);
         params[i] = .{
             .name = decl.name,
             .param_type = decl.decl_type.typedef,
